@@ -36,7 +36,7 @@ init_statistics <- function(N0) {
 init_disease <- function(pop_matrix) {
     # calculate n.o. individuals to be infected, random sample those and infect
     n_infected <- round(nrow(pop_matrix) * 0.01)
-    i_infected <- sample(seq_len(sum(pop_matrix[pop_matrix[,"state"] == "susceptible"))), n_infected)
+    i_infected <- sample(which(pop_matrix[, "state"] == "susceptible"), n_infected)
     pop_matrix[i_infected, "state"] = "infected"
 
     return (pop_matrix)
