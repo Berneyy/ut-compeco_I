@@ -6,8 +6,8 @@
 # ----- Define functions for simulation -----
 
 # function to initialize matrix for population N0
-# input : N0: Number of individuals in starting population
-# output: Matrix containing population N0, all in 'susceptible' state
+# input : N0: number of individuals in starting population
+# output: matrix containing population N0, all in 'susceptible' state
 init_pop <- function(N0) {
     pop_matrix <- matrix(data=c(rep("susceptible", N0)),
                          nrow=N0,
@@ -18,10 +18,10 @@ init_pop <- function(N0) {
 }
 
 # function to initialize statistics object for starting population N0
-# input : N0: Number of individuals in starting population
-# output: Statistics object containing initial statistics for day 0
-init_statistics <- function(N0) {
-    statistics <- matrix(data=c(0, N0, 0, 0),
+# input : pop_matrix: matrix of individuals in a population
+# output: statistics object containing initial statistics for day 0
+init_statistics <- function(pop_matrix) {
+    statistics <- matrix(data=c(0, sum(pop_matrix[,"state"] == "susceptible"), sum(pop_matrix[,"state"] == "infected"), sum(pop_matrix[,"state"] == "recovered")),
                          nrow=1,
                          ncol=4,
                          dimnames=list(NULL, c("day", "susceptible", "infected", "recovered"))
@@ -32,18 +32,18 @@ init_statistics <- function(N0) {
 # TODO: 
 # function to introduce disease into healthy population. For now, randomly infect 1% of population
 # input : pop_matrix: matrix of individuals in a population
+#                 Ni: number of individuals to be infected
 # output: population matrix with updated infection states
-init_disease <- function(pop_matrix) {
-    # calculate n.o. individuals to be infected, random sample those and infect
-    n_infected <- round(nrow(pop_matrix) * 0.01)
-    i_infected <- sample(which(pop_matrix[, "state"] == "susceptible"), n_infected)
-    pop_matrix[i_infected, "state"] = "infected"
+init_disease <- function(pop_matrix, Ni) {
+    # randomly sample N individuals in population to infect with disease
+    pop_sample <- sample(seq_len(nrow(pop_matrix)), Ni)
+    pop_matrix[pop_sample, "state"] = "infected"
 
     return (pop_matrix)
 }
 
 # function to recover infected individuals by chance
-# input : pop_matrix: 
+# input : pop_matrix: matrix of individuals in a population
 #                  y: probability of recovery
 # output: population matrix with updated recovery states
 recovery <- function(pop_matrix, y) {
@@ -91,30 +91,27 @@ infection <- function(pop_matrix, c, a) {
 # function initializing population and statistics and run the simulation on given parameters
 # input : days: number of days the simulation should be run 
 #           N0: number of individuals in starting population
+#           Ni: number of individuals to be infected at the beginning
 #            y: probability of recovery
 #            c: number of "potentially infectious contacts" per day
 #            a: probability of infection of susceptible, if in contact with infected individual 
 # output: list of final population matrix and statistics object
-simulate <- function(days, N0, y, c, a) {
+simulate <- function(days, N0, Ni, y, c, a) {
     # check if N0 and days are valid
     if (N0 <= 0 || days <= 0) {
         stop(paste0("Invalied values in N0: ", N0, " or days: ", days , ". Values must be natural numbers greater than 0"))
     }
 
-    # initialize population and statistics
+    # initialize population, introdcue disease and initialize statistics
     pop <- init_pop(N0)
-    stats <- init_statistics(N0)
-
+    pop <- init_disease(pop, Ni)
+    stats <- init_statistics(pop)
+    
     # simulate daily events
     for (t in 1:days) {
         # update population matrix
         pop <- recovery(pop, y)
         pop <- infection(pop, c, a)
-
-        # TODO: adjust initial infection
-        if (t <= 5) {
-            pop <- init_disease(pop)
-        }
 
         # update statistics
         stats <- rbind(stats,
@@ -124,7 +121,48 @@ simulate <- function(days, N0, y, c, a) {
     return (list(population=pop, statistics=stats))
 }
 
+# function to plot the change over time in a population in a statistics object
+# input : outname: name of resulting pdf to save
+#      statistics: non-empty statistics object with at least two columns. First column is always on the x-axis
+# output:
+plot_statistics <- function(outname, statistics) {
+    # extract statistics columns and generate n different colors
+    stat_cols <- colnames(statistics[,-1])
+    colors <- rainbow(length(stat_cols))
+
+    # generate plot with all columns included
+    pdf(paste0(outname, ".pdf"))
+    # loop over all columns to create plot
+    for (i in 1:length(stat_cols)) {
+        if (i == 1) {
+            plot(x=statistics[,1],
+                 y=statistics[,i+1],
+                 ylim=c(0, max(statistics)),
+                 xlab="days",
+                 ylab="number of individuals",
+                 type="l",
+                 lwd=2,
+                 col=colors[i]
+                )
+        } else {
+            points(x=statistics[,1],
+                   y=statistics[,i+1],
+                   type="l",
+                   lwd=2,
+                   col=colors[i]
+                  )
+        }
+    }
+    legend("topright",
+           legend=stat_cols,
+           col=colors,
+           lty=1,
+           bg="white"
+          )
+    invisible(dev.off)
+}
+
 # ----- Perform simulation and gather statistics ----- 
 
-# test simulation
-simulate(30, 1000, 0.4, 6, 0.3)
+sim_run <- simulate(30, 1000, 30, 0.4, 6, 0.3)
+plot_statistics("test_plot", sim_run$statistics)
